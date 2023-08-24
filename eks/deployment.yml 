@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: 
+  name: basic-deployment
+  namespace: basic
+  labels:
+    app: rapp
+spec: 
+  replicas: 3
+  selector:  
+    matchLabels: 
+      app: rapp
+  template: 
+    metadata: 
+      labels: 
+        app: rapp
+    spec: 
+      containers: 
+        - name: rapp
+          image: 266100190209.dkr.ecr.us-east-1.amazonaws.com/rapp:latest
+          imagePullPolicy: Always
+
+--- 
+apiVersion: v1
+kind: Service 
+metadata:  
+  name: rapp-service
+  namespace: basic  
+spec: 
+  type: ClusterIP
+  selector: 
+    app: rapp
+  ports: 
+    - name: rapp-cluster-ip
+      protocol: TCP
+      port: 3000
+      targetPort: 3000
+  
+--- 
+
+apiVersion: v1
+kind: Service
+metadata:  
+  namespace: basic
+  name: rapp-lb
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: "arn:aws:acm:eu-west-1:266100190209:certificate/654d9871-9804-4d72-81c8-d9c1d0b6b37c"
+    service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "443"
+spec:
+  ports:
+    - protocol: TCP
+      port: 443
+      targetPort: 3000
+  selector: 
+    app: rapp
+  type: LoadBalancer
