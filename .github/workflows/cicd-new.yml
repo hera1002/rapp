@@ -2,8 +2,9 @@ name: Build and Push Docker Image to ECR
 
 on:
   push:
-    branches:
-      branches: [ "main" ]
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
 jobs:
   build_and_push:
