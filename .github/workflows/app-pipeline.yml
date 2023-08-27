@@ -3,6 +3,8 @@ name: Build and Push Docker Image to ECR
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - 'src/**'
   pull_request:
     branches: [ "main" ]
 
@@ -32,7 +34,7 @@ jobs:
           BRANCH_NAME=${GITHUB_REF##*/}
           COMMIT_HASH=$(git rev-parse --short $GITHUB_SHA)
           AWS_ACCOUNT_ID=144989213705
-
+          cd app
           docker build -t $IMAGE_NAME:$BRANCH_NAME-$COMMIT_HASH .
           docker tag $IMAGE_NAME:$BRANCH_NAME-$COMMIT_HASH $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$IMAGE_NAME:$BRANCH_NAME-$COMMIT_HASH
 
@@ -42,5 +44,4 @@ jobs:
           IMAGE_NAME=napp
           BRANCH_NAME=${GITHUB_REF##*/}
           COMMIT_HASH=$(git rev-parse --short $GITHUB_SHA)
-
           docker push $AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/$IMAGE_NAME:$BRANCH_NAME-$COMMIT_HASH
