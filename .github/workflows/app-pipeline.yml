@@ -41,7 +41,7 @@ jobs:
       - name: Push Docker image to ECR
         run: |
           AWS_ACCOUNT_ID=144989213705
-          IMAGE_NAME=napp
+          IMAGE_NAME=rapp
           BRANCH_NAME=${GITHUB_REF##*/}
           COMMIT_HASH=$(git rev-parse --short $GITHUB_SHA)
           docker push $AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/$IMAGE_NAME:$BRANCH_NAME-$COMMIT_HASH
