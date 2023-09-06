@@ -88,7 +88,9 @@ resource "aws_lb" "internal_lb" {
   name               = "my-internal-lb"
   internal           = true
   load_balancer_type = "application"
-  subnets            = ["subnet-023c24b71579d4c85","subnet-063b5dbda7d74086b"]  # Replace with your private subnet IDs
+  subnets            = ["subnet-023c24b71579d4c85","subnet-063b5dbda7d74086b"]  
+   security_groups    = [aws_security_group.my_security_group.id]
+  # Replace with your private subnet IDs
 }
 
 

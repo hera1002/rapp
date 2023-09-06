@@ -1,22 +1,13 @@
-variable "image_tag" {
-  default = "main-9a41ea3"
+provider "aws" {
+  region = "us-east-1"  # Change to your desired AWS region
+  #TODO specify AWS provider version
 }
-variable "image_uri" {
-  default = "136629348357.dkr.ecr.us-east-1.amazonaws.com/rapp"
-}
-variable "branch" {
-  default = "main"
-}
-
-
-
 
 data "aws_vpc" "default" {
   tags = {
     Name = "rapp"  # Replace with your desired subnet tag key-value pair
   }
 }
-
 
 data "aws_subnets" "public_subnet" {
   filter {
@@ -44,14 +35,12 @@ data "aws_ecs_cluster" "rapp" {
   cluster_name = "rapp"
 }
 
-
 data "aws_ecs_cluster" "rapp-dev" {
   cluster_name = "rapp-dev"
 }
 
-
 resource "aws_ecs_task_definition" "my_app" {
-  family                   = "my-app"
+  family                   = "r-app"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   execution_role_arn       = aws_iam_role.ecs_execution_role.arn
@@ -68,86 +57,66 @@ resource "aws_ecs_task_definition" "my_app" {
           hostPort      = 3000
         }
       ]
-      memory        = 512  # Specify the memory value in megabytes
-      memory_reservation = 256  # Specify the memory reservation in megabytes
     }
   ])
 }
 
-resource "aws_iam_role" "ecs_execution_role" {
-  name = "ecs_execution_role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Action = "sts:AssumeRole",
-        Effect = "Allow",
-        Principal = {
-          Service = "ecs-tasks.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role" "ecs_task_role" {
-  name = "ecs_task_role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Action = "sts:AssumeRole",
-        Effect = "Allow",
-        Principal = {
-          Service = "ecs-tasks.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
-
 resource "aws_ecs_service" "my_app" {
-  name            = var.branch == "main" ? "rapp-prod" : "${var.branch}+dev"
+  name            = var.branch == "main" ? "rapp-stge" : "${var.branch}-dev"
   cluster         = var.branch == "main" ? data.aws_ecs_cluster.rapp.id : data.aws_ecs_cluster.rapp-dev.id
   task_definition = aws_ecs_task_definition.my_app.arn
   launch_type     = "FARGATE"
-  desired_count   = 1
+  desired_count   = 4
 
   network_configuration {
-    subnets = ["subnet-023c24b71579d4c85"]
+    subnets = data.aws_subnets.private_subnet.ids
+    security_groups = [aws_security_group.ecs_service_sg.id]
+  }
+ load_balancer {
+    target_group_arn = aws_lb_target_group.ecs_target_group.arn
+    container_name   = "r-app-container"  # Replace with your container name
+    container_port   = 3000  # Port that your container listens on
+  }
+}
+
+resource "aws_security_group" "ecs_service_sg" {
+  name        = "ecs-service"
+  description = "Allow all ports from 10.0.0.0/8"
+  vpc_id      = "vpc-07aeb65db4c5d753f"
+  ingress {
+    from_port   = 0   # Allow traffic from any port
+    to_port     = 65535  # Allow traffic to any port
+    protocol    = "tcp"  # Allow TCP traffic
+    cidr_blocks = ["10.0.0.0/8"]  # Specify the IP range to allow
   }
 
-  # load_balancer {
-  #   target_group_arn = aws_lb_target_group.ecs_target_group.arn
-  #   container_name   = "my-container-name"  # Replace with your container name
-  #   container_port   = 3000 # Replace with the port your application listens on
-  # }
+  egress {
+    from_port   = 0   # Allow traffic from any port
+    to_port     = 0  # Allow traffic to any port
+    protocol    = "-1"  # Allow all protocols for egress traffic
+    cidr_blocks = ["0.0.0.0/0"]  # Allow egress traffic to any destination
+  }
 }
 
 
 
+resource "aws_security_group" "lb_sg" {
+  name        = "lb-sg"
+  description = "Allow all ports from 10.0.0.0/8"
+  vpc_id      = "vpc-07aeb65db4c5d753f"
+  ingress {
+    from_port   = 80   # Allow traffic from any port
+    to_port     = 80  # Allow traffic to any port
+    protocol    = "tcp"  # Allow TCP traffic
+    cidr_blocks = ["10.0.0.0/8"]  # Specify the IP range to allow
+  }
 
-# resource "aws_lb" "internal_lb" {
-#   name               = "my-internal-lb"
-#   internal           = true
-#   load_balancer_type = "application"
-#   subnets            = data.aws_subnets.private_subnet[0].id
-# }
+  egress {
+    from_port   = 0   # Allow traffic from any port
+    to_port     = 0  # Allow traffic to any port
+    protocol    = "-1"  # Allow all protocols for egress traffic
+    cidr_blocks = ["0.0.0.0/0"]  # Allow egress traffic to any destination
+  }
+}
 
-# resource "aws_lb_target_group" "ecs_target_group" {
-#   name     = "ecs-target-group"
-#   port     = 80
-#   protocol = "HTTP"
-#   vpc_id   = data.aws_vpc.default.id
-# }
 
-# resource "aws_lb_listener" "ecs_listener" {
-#   load_balancer_arn = aws_lb.internal_lb.arn
-#   port              = 80
-#   protocol          = "HTTP"
-
-#   default_action {
-#     type             = "forward"
-#     target_group_arn = aws_lb_target_group.ecs_target_group.arn
-#   }
-# }
