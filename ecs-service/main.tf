@@ -1,6 +1,49 @@
-variable "image_tag" {}
-variable "image_uri" {}
-variable "branch" {}
+variable "image_tag" {
+  default = ""
+}
+variable "image_uri" {
+  default = "136629348357.dkr.ecr.us-east-1.amazonaws.com/rapp"
+}
+variable "branch" {
+  default = "main"
+}
+
+
+
+
+data "aws_vpc" "default" {
+  vpc_id = data.aws_vpc.standardvpc.id  # Reference the VPC data source
+  tags = {
+    Environment = "dev"  # Replace with your desired subnet tag key-value pair
+  }
+}
+
+
+data "aws_subnet" "private_subnet" {
+  vpc_id = data.aws_vpc.default.id  # Reference the VPC data source
+
+  tags = {
+    type = "private"  # Replace with your desired subnet tag key-value pair
+  }
+}
+
+data "aws_subnet" "public" {
+  vpc_id = data.aws_vpc.default.id  # Reference the VPC data source
+
+  tags = {
+    type = "public"  # Replace with your desired subnet tag key-value pair
+  }
+}
+
+data "aws_ecs_cluster" "rapp" {
+  name = "rapp"
+}
+
+
+data "aws_ecs_cluster" "rapp-dev" {
+  name = "rapp-dev"
+}
+
 
 resource "aws_ecs_task_definition" "my_app" {
   family                   = "my-app"
@@ -56,22 +99,52 @@ resource "aws_iam_role" "ecs_task_role" {
 }
 
 resource "aws_ecs_service" "my_app" {
-  name            = var.branch == "main" ? "my-app" : "my-app-dev"
-  cluster         = aws_ecs_cluster.my_cluster.id
+  name            = var.branch == "main" ? "rapp-prod" : "${var.branch}+dev"
+  cluster         = var.branch == "main" ? data.aws_ecs_cluster.rapp.id : data.aws_ecs_cluster.rapp-dev.id
   task_definition = aws_ecs_task_definition.my_app.arn
   launch_type     = "FARGATE"
   desired_count   = 1
 
   network_configuration {
-    subnets = [aws_subnet.my_subnet.id]
+    subnets = [data.aws_subnet.private_subnet[*].id ]
     security_groups = [aws_security_group.my_security_group.id]
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.ecs_target_group.arn
+    container_name   = "my-container-name"  # Replace with your container name
+    container_port   = 80  # Replace with the port your application listens on
   }
 }
 
-resource "aws_subnet" "my_subnet" {
-  # Define your subnets
-}
+
 
 resource "aws_security_group" "my_security_group" {
   # Define your security group
+}
+
+
+resource "aws_lb" "internal_lb" {
+  name               = "my-internal-lb"
+  internal           = true
+  load_balancer_type = "application"
+  subnets            = data.aws_subnet.private_subnet[*].id
+}
+
+resource "aws_lb_target_group" "ecs_target_group" {
+  name     = "ecs-target-group"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.default.id
+}
+
+resource "aws_lb_listener" "ecs_listener" {
+  load_balancer_arn = aws_lb.internal_lb.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.ecs_target_group.arn
+  }
 }
