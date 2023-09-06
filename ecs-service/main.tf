@@ -1,5 +1,5 @@
 variable "image_tag" {
-  default = ""
+  default = "main-9a41ea3"
 }
 variable "image_uri" {
   default = "136629348357.dkr.ecr.us-east-1.amazonaws.com/rapp"
@@ -12,36 +12,41 @@ variable "branch" {
 
 
 data "aws_vpc" "default" {
-  vpc_id = data.aws_vpc.standardvpc.id  # Reference the VPC data source
   tags = {
-    Environment = "dev"  # Replace with your desired subnet tag key-value pair
+    Name = "rapp"  # Replace with your desired subnet tag key-value pair
   }
 }
 
 
-data "aws_subnet" "private_subnet" {
-  vpc_id = data.aws_vpc.default.id  # Reference the VPC data source
+data "aws_subnets" "public_subnet" {
+  filter {
+    name   = "vpc-id"
+    values =  [data.aws_vpc.default.id]
+  }
 
   tags = {
-    type = "private"  # Replace with your desired subnet tag key-value pair
+    type = "public"
   }
 }
 
-data "aws_subnet" "public" {
-  vpc_id = data.aws_vpc.default.id  # Reference the VPC data source
+data "aws_subnets" "private_subnet" {
+  filter {
+    name   = "vpc-id"
+    values =  [data.aws_vpc.default.id]
+  }
 
   tags = {
-    type = "public"  # Replace with your desired subnet tag key-value pair
+    type = "private"
   }
 }
 
 data "aws_ecs_cluster" "rapp" {
-  name = "rapp"
+  cluster_name = "rapp"
 }
 
 
 data "aws_ecs_cluster" "rapp-dev" {
-  name = "rapp-dev"
+  cluster_name = "rapp-dev"
 }
 
 
@@ -51,7 +56,8 @@ resource "aws_ecs_task_definition" "my_app" {
   requires_compatibilities = ["FARGATE"]
   execution_role_arn       = aws_iam_role.ecs_execution_role.arn
   task_role_arn            = aws_iam_role.ecs_task_role.arn
-
+  cpu    = "256"  # Specify the CPU units (1 vCPU = 256 CPU units)
+  memory = "512"  # Specify the memory in megabyte
   container_definitions = jsonencode([
     {
       name  = "r-app-container"
@@ -59,9 +65,11 @@ resource "aws_ecs_task_definition" "my_app" {
       portMappings = [
         {
           containerPort = 3000
-          hostPort      = 80
+          hostPort      = 3000
         }
       ]
+      memory        = 512  # Specify the memory value in megabytes
+      memory_reservation = 256  # Specify the memory reservation in megabytes
     }
   ])
 }
@@ -106,45 +114,40 @@ resource "aws_ecs_service" "my_app" {
   desired_count   = 1
 
   network_configuration {
-    subnets = [data.aws_subnet.private_subnet[*].id ]
-    security_groups = [aws_security_group.my_security_group.id]
+    subnets = ["subnet-023c24b71579d4c85"]
   }
 
-  load_balancer {
-    target_group_arn = aws_lb_target_group.ecs_target_group.arn
-    container_name   = "my-container-name"  # Replace with your container name
-    container_port   = 80  # Replace with the port your application listens on
-  }
+  # load_balancer {
+  #   target_group_arn = aws_lb_target_group.ecs_target_group.arn
+  #   container_name   = "my-container-name"  # Replace with your container name
+  #   container_port   = 3000 # Replace with the port your application listens on
+  # }
 }
 
 
 
-resource "aws_security_group" "my_security_group" {
-  # Define your security group
-}
 
+# resource "aws_lb" "internal_lb" {
+#   name               = "my-internal-lb"
+#   internal           = true
+#   load_balancer_type = "application"
+#   subnets            = data.aws_subnets.private_subnet[0].id
+# }
 
-resource "aws_lb" "internal_lb" {
-  name               = "my-internal-lb"
-  internal           = true
-  load_balancer_type = "application"
-  subnets            = data.aws_subnet.private_subnet[*].id
-}
+# resource "aws_lb_target_group" "ecs_target_group" {
+#   name     = "ecs-target-group"
+#   port     = 80
+#   protocol = "HTTP"
+#   vpc_id   = data.aws_vpc.default.id
+# }
 
-resource "aws_lb_target_group" "ecs_target_group" {
-  name     = "ecs-target-group"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.default.id
-}
+# resource "aws_lb_listener" "ecs_listener" {
+#   load_balancer_arn = aws_lb.internal_lb.arn
+#   port              = 80
+#   protocol          = "HTTP"
 
-resource "aws_lb_listener" "ecs_listener" {
-  load_balancer_arn = aws_lb.internal_lb.arn
-  port              = 80
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.ecs_target_group.arn
-  }
-}
+#   default_action {
+#     type             = "forward"
+#     target_group_arn = aws_lb_target_group.ecs_target_group.arn
+#   }
+# }
