@@ -120,3 +120,13 @@ resource "aws_security_group" "lb_sg" {
 }
 
 
+terraform {
+  backend "s3" {
+    bucket         = "app-r"
+    key            = "ecs-servcie.tfstate"
+    region         = "us-east-1" # Change to your desired AWS region
+    encrypt        = true
+    dynamodb_table = "terraform-lock"
+    workspace_key_prefix = "tf-state"
+  }
+}

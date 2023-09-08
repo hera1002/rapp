@@ -2,7 +2,7 @@ name: Build and Push Docker Image to ECR
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main","devops","*"]
     # paths:
     #   - 'app/**'
   pull_request:
@@ -48,12 +48,33 @@ jobs:
           COMMIT_HASH=$(git rev-parse --short $GITHUB_SHA)
           docker push $AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/$IMAGE_NAME:$BRANCH_NAME-$COMMIT_HASH
 
-      # - name: Setup Terraform
-      #   uses: hashicorp/setup-terraform@v1
-      #   run: |
-      #     terraform init
-      #     terraform apply -auto-approve -var "image_tag=${{ github.sha }}" -var "branch=${{ github.ref }}"
-      #   env:
-      #     TF_VAR_aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      #     TF_VAR_aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Terraform-Setup
+        uses: hashicorp/setup-terraform@v1
+        env:
+          TF_VAR_aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          TF_VAR_aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          AWS_ACCOUNT_ID=136629348357
+          IMAGE_NAME=rapp
+          BRANCH_NAME=${GITHUB_REF##*/}
+          COMMIT_HASH=$(git rev-parse --short $GITHUB_SHA)
+          cd ecs-service
+          terraform init 
+          # Set the desired workspace name
+          desired_workspace=$BRANCH_NAME
+
+          # Check if the workspace exists
+          if terraform workspace list | grep -q "$desired_workspace"; then
+            echo "Workspace '$desired_workspace' already exists."
+          else
+            # If the workspace doesn't exist, create it
+            terraform workspace new "$desired_workspace"
+            echo "Created workspace '$desired_workspace'."
+          fi
+
+          # Select the desired workspace
+          terraform workspace select "$desired_workspace"
+          echo "Selected workspace '$desired_workspace'."
+          terraform init 
+          terraform apply --auto-aprove -var 
 

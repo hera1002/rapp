@@ -3,15 +3,15 @@ provider "aws" {
 }
 
 resource "aws_ecs_cluster" "rapp" {
-  name = "rapp"
+  name = "rvapp"
 }
 
 resource "aws_ecs_cluster" "rapp-int" {
-  name = "rapp-int"
+  name = "rvapp-int"
 }
 
 resource "aws_ecs_cluster" "rapp-dev" {
-  name = "rapp-dev"
+  name = "rvapp-dev"
 }
 
 terraform {
@@ -21,5 +21,6 @@ terraform {
     region         = "us-east-1" # Change to your desired AWS region
     encrypt        = true
     dynamodb_table = "terraform-lock"
+    workspace_key_prefix = "tf-state"
   }
 }
